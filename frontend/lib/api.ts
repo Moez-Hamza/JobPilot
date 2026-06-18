@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = "/api";
 
 export interface Job {
   id: string;
@@ -38,12 +38,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getJobs: (status?: string, search?: string) => {
+  getJobs: (status?: string, search?: string, limit = 12, offset = 0) => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (search) params.set("search", search);
-    const qs = params.toString();
-    return request<Job[]>(`/jobs${qs ? `?${qs}` : ""}`);
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
+    return request<Job[]>(`/jobs?${params.toString()}`);
   },
 
   getJob: (id: string) => request<Job>(`/jobs/${id}`),

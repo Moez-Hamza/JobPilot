@@ -6,18 +6,17 @@ import StatusBadge from "@/components/StatusBadge";
 import JobDetailModal from "@/components/JobDetailModal";
 import { Plus, Loader2, ExternalLink, Search } from "lucide-react";
 
-const STATUS_TABS: Array<Job["status"] | "All"> = [
-  "All",
+const STATUS_TABS: Array<Job["status"]> = [
   "Applied",
   "Interviewing",
-  "Rejected",
   "Offer",
+  "Rejected",
 ];
 
 export default function TrackerPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Job["status"] | "All">("All");
+  const [activeTab, setActiveTab] = useState<Job["status"]>("Applied");
   const [search, setSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -34,8 +33,7 @@ export default function TrackerPage() {
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      const status = activeTab === "All" ? undefined : activeTab;
-      const data = await api.getJobs(status, search || undefined);
+      const data = await api.getJobs(activeTab, search || undefined, 100, 0);
       setJobs(data);
     } catch (e) {
       console.error(e);
@@ -77,6 +75,8 @@ export default function TrackerPage() {
     return acc;
   }, {});
 
+  const tabCount = jobs.length;
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -116,7 +116,7 @@ export default function TrackerPage() {
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              {tab}
+              {tab}{activeTab === tab && tabCount > 0 ? ` (${tabCount})` : ""}
             </button>
           ))}
         </div>

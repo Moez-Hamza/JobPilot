@@ -15,7 +15,7 @@ def get_preferences():
         return {
             "id": 1,
             "target_titles": ["Full Stack Developer", "Backend Engineer"],
-            "target_locations": ["Tunis", "Paris"],
+            "target_locations": ["Tunis, Tunisia", "Paris, France"],
             "experience_level": "Mid",
             "keywords_include": ["Python", "React", "TypeScript", "Node.js"],
             "keywords_exclude": ["Crypto", "Web3", "Blockchain"],

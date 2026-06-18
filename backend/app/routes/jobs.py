@@ -11,31 +11,24 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 def list_jobs(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    limit: int = Query(12, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ):
     with get_db() as conn:
         with conn.cursor() as cur:
-            if status and search:
-                cur.execute(
-                    """SELECT * FROM jobs
-                       WHERE status = %s
-                         AND (LOWER(title) LIKE %s OR LOWER(company) LIKE %s OR LOWER(location) LIKE %s)
-                       ORDER BY date_discovered DESC""",
-                    (status, f"%{search.lower()}%", f"%{search.lower()}%", f"%{search.lower()}%"),
-                )
-            elif status:
-                cur.execute(
-                    "SELECT * FROM jobs WHERE status = %s ORDER BY date_discovered DESC",
-                    (status,),
-                )
-            elif search:
-                cur.execute(
-                    """SELECT * FROM jobs
-                       WHERE LOWER(title) LIKE %s OR LOWER(company) LIKE %s OR LOWER(location) LIKE %s
-                       ORDER BY date_discovered DESC""",
-                    (f"%{search.lower()}%", f"%{search.lower()}%", f"%{search.lower()}%"),
-                )
-            else:
-                cur.execute("SELECT * FROM jobs ORDER BY date_discovered DESC")
+            conditions = []
+            params: list = []
+            if status:
+                conditions.append("status = %s")
+                params.append(status)
+            if search:
+                conditions.append("(LOWER(title) LIKE %s OR LOWER(company) LIKE %s OR LOWER(location) LIKE %s)")
+                params += [f"%{search.lower()}%"] * 3
+            where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+            cur.execute(
+                f"SELECT * FROM jobs {where} ORDER BY date_discovered DESC LIMIT %s OFFSET %s",
+                params + [limit, offset],
+            )
             rows = cur.fetchall()
     return [dict(r) for r in rows]
 

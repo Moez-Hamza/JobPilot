@@ -1,24 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Job } from "@/lib/api";
+import { api, type Job, type UserPreferences } from "@/lib/api";
 import JobCard from "@/components/JobCard";
 import JobDetailModal from "@/components/JobDetailModal";
-import { Search, RefreshCw, Loader2, Zap } from "lucide-react";
+import { Search, RefreshCw, Loader2, Zap, ChevronLeft, ChevronRight } from "lucide-react";
+
+const PAGE_SIZE = 12;
 
 export default function DashboardPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [scraping, setScraping] = useState(false);
   const [notification, setNotification] = useState("");
+  const [prefs, setPrefs] = useState<UserPreferences | null>(null);
 
-  async function fetchJobs() {
+  useEffect(() => {
+    api.getPreferences().then(setPrefs).catch(() => {});
+  }, []);
+
+  async function fetchJobs(p: number) {
     setLoading(true);
     try {
-      const data = await api.getJobs("Matched", search || undefined);
+      const data = await api.getJobs("Matched", search || undefined, PAGE_SIZE, p * PAGE_SIZE);
       setJobs(data);
+      setHasMore(data.length === PAGE_SIZE);
     } catch (e) {
       console.error(e);
     } finally {
@@ -27,14 +37,20 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    void fetchJobs();
+    setPage(0);
+    void fetchJobs(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  useEffect(() => {
+    void fetchJobs(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   async function handleApply(id: string) {
     await api.updateJobStatus(id, "Applied");
     setJobs((prev) => prev.filter((j) => j.id !== id));
-    showNotification("Marked as Applied ✓");
+    showNotification("Marked as Applied");
   }
 
   async function handleDismiss(id: string) {
@@ -46,8 +62,8 @@ export default function DashboardPage() {
     setScraping(true);
     try {
       await api.triggerScrape();
-      showNotification("Scrape started — new jobs will appear shortly");
-      setTimeout(() => { void fetchJobs(); }, 5000);
+      showNotification("Scrape started - new jobs will appear shortly");
+      setTimeout(() => { void fetchJobs(page); }, 5000);
     } catch (e) {
       console.error(e);
     } finally {
@@ -69,13 +85,15 @@ export default function DashboardPage() {
     setTimeout(() => setNotification(""), 3000);
   }
 
+  const subtitle = prefs
+    ? [...prefs.target_locations, ...prefs.target_titles].join(" | ")
+    : "Jobs discovered based on your preferences";
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Matched Jobs</h1>
-        <p className="text-gray-400 text-sm mt-1">
-          Jobs discovered based on your preferences · Tunis &amp; Paris · Full Stack Developer
-        </p>
+        <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
       </div>
 
       <div className="flex items-center gap-3 mb-6">
@@ -90,7 +108,7 @@ export default function DashboardPage() {
           />
         </div>
         <button
-          onClick={fetchJobs}
+          onClick={() => { setPage(0); void fetchJobs(0); }}
           className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
@@ -101,11 +119,7 @@ export default function DashboardPage() {
           disabled={scraping}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
-          {scraping ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Zap className="w-4 h-4" />
-          )}
+          {scraping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           Discover Jobs
         </button>
       </div>
@@ -129,17 +143,36 @@ export default function DashboardPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {jobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              onApply={handleApply}
-              onDismiss={handleDismiss}
-              onClick={setSelectedJob}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {jobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onApply={handleApply}
+                onDismiss={handleDismiss}
+                onClick={setSelectedJob}
+              />
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-6">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-sm rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Previous
+            </button>
+            <span className="text-sm text-gray-500">Page {page + 1}</span>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!hasMore}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-sm rounded-lg transition-colors"
+            >
+              Next <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </>
       )}
 
       <JobDetailModal
