@@ -78,12 +78,7 @@ export const api = {
     request<{
       optimized_bullets: string[];
       strategy_notes: string;
-      historical_feedback_used: Array<{
-        title?: string;
-        company?: string;
-        rejection_reason_category?: string;
-        ai_feedback_notes?: string;
-      }>;
+      historical_feedback_used: unknown[];
     }>("/ai/optimize-resume", {
       method: "POST",
       body: JSON.stringify({ job_description, resume_bullets }),

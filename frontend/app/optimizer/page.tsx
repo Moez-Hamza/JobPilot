@@ -4,21 +4,25 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { Sparkles, Loader2, AlertCircle, Copy, Check } from "lucide-react";
 
+interface HistoricalFeedback {
+  title?: string;
+  company?: string;
+  rejection_reason_category?: string;
+  ai_feedback_notes?: string;
+}
+
+interface OptimizeResult {
+  optimized_bullets: string[];
+  strategy_notes: string;
+  historical_feedback_used: HistoricalFeedback[];
+}
+
 export default function OptimizerPage() {
   const [jobDescription, setJobDescription] = useState("");
   const [resumeBullets, setResumeBullets] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{
-    optimized_bullets: string[];
-    strategy_notes: string;
-    historical_feedback_used: Array<{
-      title?: string;
-      company?: string;
-      rejection_reason_category?: string;
-      ai_feedback_notes?: string;
-    }>;
-  } | null>(null);
+  const [result, setResult] = useState<OptimizeResult | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function handleOptimize(e: React.FormEvent) {
@@ -29,7 +33,7 @@ export default function OptimizerPage() {
     setResult(null);
     try {
       const data = await api.optimizeResume(jobDescription, resumeBullets);
-      setResult(data);
+      setResult(data as OptimizeResult);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Optimization failed");
     } finally {

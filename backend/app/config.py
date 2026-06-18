@@ -3,10 +3,9 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    OPENAI_API_KEY: str
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
-    APIFY_API_KEY: str
+    DATABASE_URL: str = "postgresql://localhost/jobpilot"
+    OPENAI_API_KEY: Optional[str] = None
+    APIFY_API_KEY: Optional[str] = None
     DISCORD_WEBHOOK_URL: Optional[str] = None
     SLACK_WEBHOOK_URL: Optional[str] = None
 

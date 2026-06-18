@@ -12,60 +12,84 @@ def list_jobs(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
 ):
-    db = get_db()
-    query = db.table("jobs").select("*").order("date_discovered", desc=True)
-    if status:
-        query = query.eq("status", status)
-    result = query.execute()
-    jobs = result.data or []
-    if search:
-        s = search.lower()
-        jobs = [
-            j
-            for j in jobs
-            if s in j.get("title", "").lower()
-            or s in j.get("company", "").lower()
-            or s in j.get("location", "").lower()
-        ]
-    return jobs
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            if status and search:
+                cur.execute(
+                    """SELECT * FROM jobs
+                       WHERE status = %s
+                         AND (LOWER(title) LIKE %s OR LOWER(company) LIKE %s OR LOWER(location) LIKE %s)
+                       ORDER BY date_discovered DESC""",
+                    (status, f"%{search.lower()}%", f"%{search.lower()}%", f"%{search.lower()}%"),
+                )
+            elif status:
+                cur.execute(
+                    "SELECT * FROM jobs WHERE status = %s ORDER BY date_discovered DESC",
+                    (status,),
+                )
+            elif search:
+                cur.execute(
+                    """SELECT * FROM jobs
+                       WHERE LOWER(title) LIKE %s OR LOWER(company) LIKE %s OR LOWER(location) LIKE %s
+                       ORDER BY date_discovered DESC""",
+                    (f"%{search.lower()}%", f"%{search.lower()}%", f"%{search.lower()}%"),
+                )
+            else:
+                cur.execute("SELECT * FROM jobs ORDER BY date_discovered DESC")
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
 
 
 @router.get("/{job_id}", response_model=JobOut)
 def get_job(job_id: str):
-    db = get_db()
-    result = db.table("jobs").select("*").eq("id", job_id).single().execute()
-    if not result.data:
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM jobs WHERE id = %s", (job_id,))
+            row = cur.fetchone()
+    if not row:
         raise HTTPException(status_code=404, detail="Job not found")
-    return result.data
+    return dict(row)
 
 
 @router.post("", response_model=JobOut, status_code=201)
 def create_job(payload: JobCreate):
-    db = get_db()
-    existing = db.table("jobs").select("id").eq("url", payload.url).execute()
-    if existing.data:
-        raise HTTPException(status_code=409, detail="Job URL already exists")
-    result = db.table("jobs").insert(payload.model_dump()).execute()
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create job")
-    return result.data[0]
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM jobs WHERE url = %s", (payload.url,))
+            if cur.fetchone():
+                raise HTTPException(status_code=409, detail="Job URL already exists")
+            cur.execute(
+                """INSERT INTO jobs (title, company, location, job_description, url, status)
+                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+                (payload.title, payload.company, payload.location,
+                 payload.job_description, payload.url, payload.status),
+            )
+            row = cur.fetchone()
+    return dict(row)
 
 
 @router.patch("/{job_id}/status", response_model=JobOut)
 def update_job_status(job_id: str, payload: JobStatusUpdate):
-    db = get_db()
-    update_data = {"status": payload.status}
-    if payload.status == JobStatus.APPLIED:
-        update_data["date_applied"] = datetime.now(timezone.utc).isoformat()
-    result = (
-        db.table("jobs").update(update_data).eq("id", job_id).execute()
-    )
-    if not result.data:
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            if payload.status == JobStatus.APPLIED:
+                cur.execute(
+                    "UPDATE jobs SET status = %s, date_applied = %s WHERE id = %s RETURNING *",
+                    (payload.status, datetime.now(timezone.utc), job_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE jobs SET status = %s WHERE id = %s RETURNING *",
+                    (payload.status, job_id),
+                )
+            row = cur.fetchone()
+    if not row:
         raise HTTPException(status_code=404, detail="Job not found")
-    return result.data[0]
+    return dict(row)
 
 
 @router.delete("/{job_id}", status_code=204)
 def delete_job(job_id: str):
-    db = get_db()
-    db.table("jobs").delete().eq("id", job_id).execute()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM jobs WHERE id = %s", (job_id,))
