@@ -13,7 +13,10 @@ router = APIRouter(prefix="/ai", tags=["AI"])
 def _get_openai_client():
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured")
-    return OpenAI(api_key=settings.OPENAI_API_KEY)
+    kwargs = {"api_key": settings.OPENAI_API_KEY}
+    if settings.OPENAI_BASE_URL:
+        kwargs["base_url"] = settings.OPENAI_BASE_URL
+    return OpenAI(**kwargs)
 
 
 @router.post("/analyze-rejection/{job_id}")
@@ -47,13 +50,14 @@ def analyze_rejection(job_id: str, payload: RejectionAnalysisRequest):
     raw = ""
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
             max_tokens=400,
+            response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content.strip()
         parsed = json.loads(raw)
@@ -115,13 +119,14 @@ def optimize_resume(payload: OptimizeResumeRequest):
     raw = ""
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.4,
             max_tokens=1200,
+            response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content.strip()
         parsed = json.loads(raw)
