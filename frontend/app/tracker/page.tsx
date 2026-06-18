@@ -29,6 +29,17 @@ export default function TrackerPage() {
   });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
+  const [counts, setCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    Promise.all(
+      STATUS_TABS.map((s) => api.getJobs(s, undefined, 1000, 0).then((d) => ({ s, n: d.length })))
+    ).then((results) => {
+      const c: Record<string, number> = {};
+      results.forEach(({ s, n }) => { c[s] = n; });
+      setCounts(c);
+    }).catch(() => {});
+  }, [jobs]);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -69,11 +80,6 @@ export default function TrackerPage() {
       setAddLoading(false);
     }
   }
-
-  const counts = jobs.reduce<Record<string, number>>((acc, j) => {
-    acc[j.status] = (acc[j.status] || 0) + 1;
-    return acc;
-  }, {});
 
   const tabCount = jobs.length;
 
