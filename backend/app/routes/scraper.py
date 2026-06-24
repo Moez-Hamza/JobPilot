@@ -2,7 +2,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from app.config import settings
 from app.database import get_db
-from app.models import TriggerScrapeRequest
+from app.models import TriggerScrapeRequest, ImportLinkedInRequest, JobOut
 from urllib.parse import urlencode
 from datetime import datetime, timezone, timedelta
 import logging
@@ -144,3 +144,85 @@ def trigger_scrape(payload: TriggerScrapeRequest, background_tasks: BackgroundTa
         raise HTTPException(status_code=503, detail="APIFY_API_KEY not configured")
     background_tasks.add_task(_run_scrape)
     return {"message": "Scrape started in background"}
+
+
+@router.post("/import-linkedin", response_model=JobOut)
+def import_linkedin_job(payload: ImportLinkedInRequest):
+    import re
+
+    url = payload.url.strip()
+    if "linkedin.com" not in url:
+        raise HTTPException(status_code=400, detail="URL must be a LinkedIn job link")
+
+    # Check if job URL already exists
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM jobs WHERE url = %s", (url,))
+            existing = cur.fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="This job is already in your tracker")
+
+    # Scrape LinkedIn job page directly via OG meta tags
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        response = httpx.get(url, headers=headers, follow_redirects=True, timeout=15)
+        response.raise_for_status()
+        html = response.text
+    except Exception as e:
+        logger.error(f"LinkedIn fetch error: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch job page from LinkedIn")
+
+    # Extract OG title: "{company} hiring {title} in {location} | LinkedIn"
+    og_title_match = re.search(r'property="og:title"\s+content="([^"]+)"', html)
+    if not og_title_match:
+        og_title_match = re.search(r'content="([^"]+)"\s+property="og:title"', html)
+
+    if not og_title_match:
+        raise HTTPException(status_code=404, detail="Could not extract job details from this URL")
+
+    og_title = og_title_match.group(1)
+
+    # Parse the OG title pattern
+    parsed = re.match(r'^(.+?)\s+hiring\s+(.+?)\s+in\s+(.+?)\s*\|\s*LinkedIn$', og_title)
+    if parsed:
+        company = parsed.group(1).strip()
+        title = parsed.group(2).strip()
+        location = parsed.group(3).strip()
+    else:
+        # Fallback: use full OG title as job title
+        title = og_title.replace(" | LinkedIn", "").strip()
+        company = "Unknown"
+        location = "Unknown"
+
+    # Extract description from OG description
+    og_desc_match = re.search(r'property="og:description"\s+content="([^"]+)"', html)
+    if not og_desc_match:
+        og_desc_match = re.search(r'content="([^"]+)"\s+property="og:description"', html)
+    description = og_desc_match.group(1) if og_desc_match else ""
+    description = description.replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')
+
+    # Use canonical URL if available
+    og_url_match = re.search(r'property="og:url"\s+content="([^"]+)"', html)
+    if not og_url_match:
+        og_url_match = re.search(r'content="([^"]+)"\s+property="og:url"', html)
+    job_url = og_url_match.group(1) if og_url_match else url
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO jobs (title, company, location, job_description, url, status, date_applied)
+                   VALUES (%s, %s, %s, %s, %s, 'Applied', %s)
+                   ON CONFLICT (url) DO NOTHING
+                   RETURNING *""",
+                (title, company, location, description, job_url, datetime.now(timezone.utc)),
+            )
+            row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=409, detail="This job is already in your tracker")
+
+    return dict(row)

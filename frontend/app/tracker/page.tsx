@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api, type Job } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import JobDetailModal from "@/components/JobDetailModal";
-import { Plus, Loader2, ExternalLink, Search } from "lucide-react";
+import { Link, Loader2, ExternalLink, Search } from "lucide-react";
 
 const STATUS_TABS: Array<Job["status"]> = [
   "Applied",
@@ -19,16 +19,11 @@ export default function TrackerPage() {
   const [activeTab, setActiveTab] = useState<Job["status"]>("Applied");
   const [search, setSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({
-    title: "",
-    company: "",
-    location: "",
-    url: "",
-    job_description: "",
-  });
-  const [addLoading, setAddLoading] = useState(false);
-  const [addError, setAddError] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importSuccess, setImportSuccess] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -76,19 +71,21 @@ export default function TrackerPage() {
     }).catch(() => {});
   }
 
-  async function handleAddJob(e: React.FormEvent) {
+  async function handleImport(e: React.FormEvent) {
     e.preventDefault();
-    setAddLoading(true);
-    setAddError("");
+    setImportLoading(true);
+    setImportError("");
+    setImportSuccess("");
     try {
-      const job = await api.createJob({ ...addForm, status: "Applied" });
+      const job = await api.importLinkedInJob(importUrl);
       setJobs((prev) => [job, ...prev]);
-      setShowAdd(false);
-      setAddForm({ title: "", company: "", location: "", url: "", job_description: "" });
+      setImportSuccess(`Imported: ${job.title} @ ${job.company}`);
+      setImportUrl("");
+      setTimeout(() => setImportSuccess(""), 4000);
     } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : "Failed to add job");
+      setImportError(err instanceof Error ? err.message : "Failed to import job");
     } finally {
-      setAddLoading(false);
+      setImportLoading(false);
     }
   }
 
@@ -104,11 +101,11 @@ export default function TrackerPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowAdd(true)}
+          onClick={() => setShowImport((v) => !v)}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
-          <Plus className="w-4 h-4" />
-          Add Application
+          <Link className="w-4 h-4" />
+          Import from LinkedIn
         </button>
       </div>
 
@@ -149,41 +146,34 @@ export default function TrackerPage() {
         </div>
       </div>
 
-      {showAdd && (
+      {showImport && (
         <form
-          onSubmit={handleAddJob}
+          onSubmit={handleImport}
           className="mb-6 bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-3"
         >
-          <h3 className="font-semibold text-white mb-1">Add Application</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <input required placeholder="Job Title *" value={addForm.title}
-              onChange={(e) => setAddForm((p) => ({ ...p, title: e.target.value }))}
-              className="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input required placeholder="Company *" value={addForm.company}
-              onChange={(e) => setAddForm((p) => ({ ...p, company: e.target.value }))}
-              className="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input required placeholder="Location *" value={addForm.location}
-              onChange={(e) => setAddForm((p) => ({ ...p, location: e.target.value }))}
-              className="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input required type="url" placeholder="Job URL *" value={addForm.url}
-              onChange={(e) => setAddForm((p) => ({ ...p, url: e.target.value }))}
-              className="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-          </div>
-          <textarea placeholder="Job Description (optional)" value={addForm.job_description}
-            onChange={(e) => setAddForm((p) => ({ ...p, job_description: e.target.value }))}
-            className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-none min-h-24" />
-          {addError && <p className="text-sm text-red-400">{addError}</p>}
+          <h3 className="font-semibold text-white mb-1">Import from LinkedIn</h3>
+          <p className="text-xs text-gray-500">Paste the LinkedIn job URL and we&apos;ll fetch the details automatically.</p>
           <div className="flex gap-2">
-            <button type="submit" disabled={addLoading}
+            <input
+              required
+              type="url"
+              placeholder="https://www.linkedin.com/jobs/view/..."
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+            />
+            <button type="submit" disabled={importLoading}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-              {addLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save
+              {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link className="w-4 h-4" />}
+              Import
             </button>
-            <button type="button" onClick={() => setShowAdd(false)}
+            <button type="button" onClick={() => { setShowImport(false); setImportError(""); setImportSuccess(""); }}
               className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-4 py-2 rounded-lg transition-colors">
               Cancel
             </button>
           </div>
+          {importError && <p className="text-sm text-red-400">{importError}</p>}
+          {importSuccess && <p className="text-sm text-green-400">{importSuccess}</p>}
         </form>
       )}
 

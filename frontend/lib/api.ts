@@ -88,6 +88,9 @@ export const api = {
       body: JSON.stringify({ job_description, resume_bullets }),
     }),
 
+  importLinkedInJob: (url: string) =>
+    request<Job>("/scraper/import-linkedin", { method: "POST", body: JSON.stringify({ url }) }),
+
   getScraperStatus: () => request<{ running: boolean; last_result: string | null }>("/scraper/status"),
 
   triggerScrape: () =>

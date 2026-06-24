@@ -68,3 +68,7 @@ class OptimizeResumeRequest(BaseModel):
 
 class TriggerScrapeRequest(BaseModel):
     force: bool = False
+
+
+class ImportLinkedInRequest(BaseModel):
+    url: str
