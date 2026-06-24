@@ -63,6 +63,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [scraping, setScraping] = useState(false);
   const [error, setError] = useState("");
   const [inputs, setInputs] = useState<Record<ArrayField, string>>({
     target_titles: "",
@@ -108,10 +109,19 @@ export default function SettingsPage() {
     try {
       await api.savePreferences(prefs);
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setSaving(false);
+      // Trigger scraper with new preferences
+      setScraping(true);
+      try {
+        await api.triggerScrape();
+      } catch {
+        // Scrape may fail if APIFY_API_KEY not set — that's okay
+      } finally {
+        setScraping(false);
+        setTimeout(() => setSaved(false), 3000);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
-    } finally {
       setSaving(false);
     }
   }
@@ -203,20 +213,27 @@ export default function SettingsPage() {
           <p className={clsx('text-sm', 'text-red-400')}>{error}</p>
         )}
 
-        {saved && (
+        {scraping && (
+          <div className={clsx('flex', 'items-center', 'gap-2', 'text-indigo-400', 'text-sm')}>
+            <Loader2 className={clsx('w-4', 'h-4', 'animate-spin')} />
+            Scraping new jobs with updated preferences...
+          </div>
+        )}
+
+        {saved && !scraping && (
           <div className={clsx('flex', 'items-center', 'gap-2', 'text-green-400', 'text-sm')}>
             <CheckCircle2 className={clsx('w-4', 'h-4')} />
-            Preferences saved successfully
+            Preferences saved & scraper triggered successfully
           </div>
         )}
 
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || scraping}
           className={clsx('flex', 'items-center', 'gap-2', 'bg-indigo-600', 'hover:bg-indigo-500', 'disabled:opacity-60', 'text-white', 'font-medium', 'px-5', 'py-2.5', 'rounded-lg', 'transition-colors')}
         >
-          {saving ? <Loader2 className={clsx('w-4', 'h-4', 'animate-spin')} /> : <Save className={clsx('w-4', 'h-4')} />}
-          Save Preferences
+          {saving || scraping ? <Loader2 className={clsx('w-4', 'h-4', 'animate-spin')} /> : <Save className={clsx('w-4', 'h-4')} />}
+          {scraping ? "Scraping..." : "Save Preferences"}
         </button>
       </form>
     </div>

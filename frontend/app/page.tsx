@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { api, type Job, type UserPreferences } from "@/lib/api";
 import JobCard from "@/components/JobCard";
 import JobDetailModal from "@/components/JobDetailModal";
-import { Search, RefreshCw, Loader2, Zap, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, BarChart3, Zap } from "lucide-react";
+import { clsx } from "clsx";
 
 const PAGE_SIZE = 12;
 
@@ -15,18 +16,49 @@ export default function DashboardPage() {
   const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [scraping, setScraping] = useState(false);
   const [notification, setNotification] = useState("");
   const [prefs, setPrefs] = useState<UserPreferences | null>(null);
+  const [stats, setStats] = useState<Record<string, number>>({});
+  const [scraping, setScraping] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pollScraperStatus = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await api.getScraperStatus();
+        setScraping(status.running);
+        if (!status.running && pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          // Refresh data after scraper finishes
+          void fetchJobs(0);
+          api.getJobStats().then(setStats).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     api.getPreferences().then(setPrefs).catch(() => {});
-  }, []);
+    api.getJobStats().then(setStats).catch(() => {});
+    // Check if scraper is already running
+    api.getScraperStatus().then((s) => {
+      if (s.running) {
+        setScraping(true);
+        pollScraperStatus();
+      }
+    }).catch(() => {});
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [pollScraperStatus]);
 
   async function fetchJobs(p: number) {
     setLoading(true);
     try {
-      const data = await api.getJobs("Matched", search || undefined, PAGE_SIZE, p * PAGE_SIZE);
+      const data = await api.getJobs("Matched", search || undefined, PAGE_SIZE, p * PAGE_SIZE, 7);
       setJobs(data);
       setHasMore(data.length === PAGE_SIZE);
     } catch (e) {
@@ -56,17 +88,16 @@ export default function DashboardPage() {
   async function handleDismiss(id: string) {
     await api.deleteJob(id);
     setJobs((prev) => prev.filter((j) => j.id !== id));
+    api.getJobStats().then(setStats).catch(() => {});
+    void fetchJobs(page);
   }
 
   async function handleScrape() {
     setScraping(true);
     try {
       await api.triggerScrape();
-      showNotification("Scrape started - new jobs will appear shortly");
-      setTimeout(() => { void fetchJobs(page); }, 5000);
-    } catch (e) {
-      console.error(e);
-    } finally {
+      pollScraperStatus();
+    } catch {
       setScraping(false);
     }
   }
@@ -91,9 +122,17 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Matched Jobs</h1>
         <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
+      </div>
+
+      <div className="mb-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 inline-flex items-center gap-3">
+          <BarChart3 className="w-4 h-4 text-indigo-400" />
+          <span className="text-xs text-gray-500 uppercase tracking-wider">Total Jobs</span>
+          <p className="text-2xl font-bold text-white">{stats.total || 0}</p>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-6">
@@ -108,13 +147,6 @@ export default function DashboardPage() {
           />
         </div>
         <button
-          onClick={() => { setPage(0); void fetchJobs(0); }}
-          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
-        <button
           onClick={handleScrape}
           disabled={scraping}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
@@ -123,6 +155,13 @@ export default function DashboardPage() {
           Discover Jobs
         </button>
       </div>
+
+      {scraping && (
+        <div className="mb-4 flex items-center gap-2 bg-indigo-900/30 border border-indigo-700/40 text-indigo-400 text-sm rounded-lg px-4 py-2.5">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Scraping new jobs based on your preferences... Data will refresh automatically.
+        </div>
+      )}
 
       {notification && (
         <div className="mb-4 bg-green-900/30 border border-green-700/40 text-green-400 text-sm rounded-lg px-4 py-2.5">
@@ -137,9 +176,9 @@ export default function DashboardPage() {
         </div>
       ) : jobs.length === 0 ? (
         <div className="text-center py-20 text-gray-600">
-          <p className="text-lg font-medium text-gray-500">No matched jobs yet</p>
+          <p className="text-lg font-medium text-gray-500">No matched jobs in the last 7 days</p>
           <p className="text-sm mt-1">
-            Click &quot;Discover Jobs&quot; to run the scraper, or add one manually via the Tracker.
+            New jobs will appear here when the daily scraper runs, or add one manually via the Tracker.
           </p>
         </div>
       ) : (

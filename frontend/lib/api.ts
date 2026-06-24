@@ -38,14 +38,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getJobs: (status?: string, search?: string, limit = 12, offset = 0) => {
+  getJobs: (status?: string, search?: string, limit = 12, offset = 0, days?: number) => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (search) params.set("search", search);
+    if (days) params.set("days", String(days));
     params.set("limit", String(limit));
     params.set("offset", String(offset));
     return request<Job[]>(`/jobs?${params.toString()}`);
   },
+
+  getJobStats: () => request<Record<string, number>>("/jobs/stats"),
 
   getJob: (id: string) => request<Job>(`/jobs/${id}`),
 
@@ -85,6 +88,8 @@ export const api = {
       body: JSON.stringify({ job_description, resume_bullets }),
     }),
 
+  getScraperStatus: () => request<{ running: boolean; last_result: string | null }>("/scraper/status"),
+
   triggerScrape: () =>
-    request("/scraper/trigger", { method: "POST", body: JSON.stringify({ force: true }) }),
+    request<{ message: string }>("/scraper/trigger", { method: "POST", body: JSON.stringify({ force: true }) }),
 };

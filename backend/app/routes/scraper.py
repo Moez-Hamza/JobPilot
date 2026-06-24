@@ -4,12 +4,15 @@ from app.config import settings
 from app.database import get_db
 from app.models import TriggerScrapeRequest
 from urllib.parse import urlencode
+from datetime import datetime, timezone, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scraper", tags=["Scraper"])
 
 APIFY_LINKEDIN_ACTOR = "curious_coder~linkedin-jobs-scraper"
+
+_scraper_status = {"running": False, "last_result": None}
 
 
 def _send_notification(job: dict):
@@ -30,8 +33,18 @@ def _send_notification(job: dict):
 
 
 def _run_scrape():
+    _scraper_status["running"] = True
+    _scraper_status["last_result"] = None
+    try:
+        _do_scrape()
+    finally:
+        _scraper_status["running"] = False
+
+
+def _do_scrape():
     if not settings.APIFY_API_KEY:
         logger.warning("APIFY_API_KEY not set — skipping scrape")
+        _scraper_status["last_result"] = "no_api_key"
         return
 
     with get_db() as conn:
@@ -69,10 +82,20 @@ def _run_scrape():
         response.raise_for_status()
         items = response.json()
         location_keywords = [loc.split(",")[0].strip().lower() for loc in locations]
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         for item in items:
             url = item.get("link") or item.get("applyUrl") or item.get("url", "")
             if not url:
                 continue
+            # Filter out jobs posted more than 7 days ago
+            posted_at = item.get("postedAt") or item.get("listedAt") or item.get("publishedAt")
+            if posted_at:
+                try:
+                    posted_date = datetime.fromisoformat(posted_at.replace("Z", "+00:00"))
+                    if posted_date < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    pass
             job_location = (item.get("location") or "").lower()
             if location_keywords and not any(kw in job_location for kw in location_keywords):
                 continue
@@ -106,7 +129,13 @@ def _run_scrape():
     for job in new_jobs:
         _send_notification(job)
 
+    _scraper_status["last_result"] = f"{len(new_jobs)} new jobs added"
     logger.info(f"Scrape complete: {len(new_jobs)} new jobs added")
+
+
+@router.get("/status")
+def scraper_status():
+    return _scraper_status
 
 
 @router.post("/trigger")

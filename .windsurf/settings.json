@@ -1,5 +1,15 @@
 {
   "editor.formatOnSave": false,
   "editor.formatOnType": false,
-  "editor.formatOnPaste": false
+  "editor.formatOnPaste": false,
+  "editor.codeActionsOnSave": {},
+  "editor.defaultFormatter": null,
+  "[typescriptreact]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": null
+  },
+  "[typescript]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": null
+  }
 }

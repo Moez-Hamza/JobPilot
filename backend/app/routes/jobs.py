@@ -2,15 +2,32 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
 from app.database import get_db
 from app.models import JobOut, JobCreate, JobStatusUpdate, JobStatus
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+
+
+@router.get("/stats")
+def job_stats():
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT status, COUNT(*) as count FROM jobs GROUP BY status")
+            rows = cur.fetchall()
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) as count FROM jobs WHERE date_discovered >= %s",
+                        (datetime.now(timezone.utc) - timedelta(days=7),))
+            recent = cur.fetchone()
+    stats = {row["status"]: row["count"] for row in rows}
+    stats["total"] = sum(stats.values())
+    stats["last_7_days"] = recent["count"] if recent else 0
+    return stats
 
 
 @router.get("", response_model=List[JobOut])
 def list_jobs(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    days: Optional[int] = Query(None, ge=1, le=365),
     limit: int = Query(12, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -24,6 +41,9 @@ def list_jobs(
             if search:
                 conditions.append("(LOWER(title) LIKE %s OR LOWER(company) LIKE %s OR LOWER(location) LIKE %s)")
                 params += [f"%{search.lower()}%"] * 3
+            if days:
+                conditions.append("date_discovered >= %s")
+                params.append(datetime.now(timezone.utc) - timedelta(days=days))
             where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
             cur.execute(
                 f"SELECT * FROM jobs {where} ORDER BY date_discovered DESC LIMIT %s OFFSET %s",
