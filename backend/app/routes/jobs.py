@@ -17,9 +17,14 @@ def job_stats():
             cur.execute("SELECT COUNT(*) as count FROM jobs WHERE date_discovered >= %s",
                         (datetime.now(timezone.utc) - timedelta(days=7),))
             recent = cur.fetchone()
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) as count FROM jobs WHERE status = 'Matched' AND date_discovered >= %s",
+                        (datetime.now(timezone.utc) - timedelta(days=7),))
+            matched_recent = cur.fetchone()
     stats = {row["status"]: row["count"] for row in rows}
     stats["total"] = sum(stats.values())
     stats["last_7_days"] = recent["count"] if recent else 0
+    stats["matched_last_7_days"] = matched_recent["count"] if matched_recent else 0
     return stats
 
 

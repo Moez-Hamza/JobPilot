@@ -33,7 +33,7 @@ export default function TrackerPage() {
 
   useEffect(() => {
     Promise.all(
-      STATUS_TABS.map((s) => api.getJobs(s, undefined, 1000, 0).then((d) => ({ s, n: d.length })))
+      STATUS_TABS.map((s) => api.getJobs(s, undefined, 100, 0).then((d) => ({ s, n: d.length })))
     ).then((results) => {
       const c: Record<string, number> = {};
       results.forEach(({ s, n }) => { c[s] = n; });
@@ -59,10 +59,21 @@ export default function TrackerPage() {
   }, [activeTab, search]);
 
   function handleStatusChange(id: string, status: Job["status"]) {
-    setJobs((prev) =>
-      prev.map((j) => (j.id === id ? { ...j, status } : j))
-    );
+    if (status !== activeTab) {
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    } else {
+      setJobs((prev) =>
+        prev.map((j) => (j.id === id ? { ...j, status } : j))
+      );
+    }
     setSelectedJob(null);
+    Promise.all(
+      STATUS_TABS.map((s) => api.getJobs(s, undefined, 100, 0).then((d) => ({ s, n: d.length })))
+    ).then((results) => {
+      const c: Record<string, number> = {};
+      results.forEach(({ s, n }) => { c[s] = n; });
+      setCounts(c);
+    }).catch(() => {});
   }
 
   async function handleAddJob(e: React.FormEvent) {

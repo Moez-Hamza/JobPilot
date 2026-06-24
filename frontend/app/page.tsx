@@ -82,6 +82,8 @@ export default function DashboardPage() {
   async function handleApply(id: string) {
     await api.updateJobStatus(id, "Applied");
     setJobs((prev) => prev.filter((j) => j.id !== id));
+    api.getJobStats().then(setStats).catch(() => {});
+    void fetchJobs(page);
     showNotification("Marked as Applied");
   }
 
@@ -121,69 +123,69 @@ export default function DashboardPage() {
     : "Jobs discovered based on your preferences";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className={clsx('p-6', 'max-w-5xl', 'mx-auto')}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Matched Jobs</h1>
-        <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
+        <h1 className={clsx('text-2xl', 'font-bold', 'text-white')}>Matched Jobs</h1>
+        <p className={clsx('text-gray-400', 'text-sm', 'mt-1')}>{subtitle}</p>
       </div>
 
       <div className="mb-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 inline-flex items-center gap-3">
-          <BarChart3 className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs text-gray-500 uppercase tracking-wider">Total Jobs</span>
-          <p className="text-2xl font-bold text-white">{stats.total || 0}</p>
+        <div className={clsx('bg-gray-900', 'border', 'border-gray-800', 'rounded-xl', 'p-4', 'inline-flex', 'items-center', 'gap-3')}>
+          <BarChart3 className={clsx('w-4', 'h-4', 'text-indigo-400')} />
+          <span className={clsx('text-xs', 'text-gray-500', 'uppercase', 'tracking-wider')}>Matched Jobs (7 days)</span>
+          <p className={clsx('text-2xl', 'font-bold', 'text-white')}>{stats.matched_last_7_days || 0}</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 mb-6">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+      <div className={clsx('flex', 'items-center', 'gap-3', 'mb-6')}>
+        <div className={clsx('relative', 'flex-1', 'max-w-sm')}>
+          <Search className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'w-4', 'h-4', 'text-gray-500')} />
           <input
             type="text"
             placeholder="Search jobs..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+            className={clsx('w-full', 'bg-gray-900', 'border', 'border-gray-700', 'rounded-lg', 'pl-9', 'pr-4', 'py-2', 'text-sm', 'text-gray-100', 'placeholder-gray-500', 'focus:outline-none', 'focus:border-indigo-500')}
           />
         </div>
         <button
           onClick={handleScrape}
           disabled={scraping}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className={clsx('flex', 'items-center', 'gap-2', 'bg-indigo-600', 'hover:bg-indigo-500', 'disabled:opacity-60', 'text-white', 'text-sm', 'font-medium', 'px-4', 'py-2', 'rounded-lg', 'transition-colors')}
         >
-          {scraping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+          {scraping ? <Loader2 className={clsx('w-4', 'h-4', 'animate-spin')} /> : <Zap className={clsx('w-4', 'h-4')} />}
           Discover Jobs
         </button>
       </div>
 
       {scraping && (
-        <div className="mb-4 flex items-center gap-2 bg-indigo-900/30 border border-indigo-700/40 text-indigo-400 text-sm rounded-lg px-4 py-2.5">
-          <Loader2 className="w-4 h-4 animate-spin" />
+        <div className={clsx('mb-4', 'flex', 'items-center', 'gap-2', 'bg-indigo-900/30', 'border', 'border-indigo-700/40', 'text-indigo-400', 'text-sm', 'rounded-lg', 'px-4', 'py-2.5')}>
+          <Loader2 className={clsx('w-4', 'h-4', 'animate-spin')} />
           Scraping new jobs based on your preferences... Data will refresh automatically.
         </div>
       )}
 
       {notification && (
-        <div className="mb-4 bg-green-900/30 border border-green-700/40 text-green-400 text-sm rounded-lg px-4 py-2.5">
+        <div className={clsx('mb-4', 'bg-green-900/30', 'border', 'border-green-700/40', 'text-green-400', 'text-sm', 'rounded-lg', 'px-4', 'py-2.5')}>
           {notification}
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48 text-gray-600">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+        <div className={clsx('flex', 'items-center', 'justify-center', 'h-48', 'text-gray-600')}>
+          <Loader2 className={clsx('w-6', 'h-6', 'animate-spin', 'mr-2')} />
           Loading jobs...
         </div>
       ) : jobs.length === 0 ? (
-        <div className="text-center py-20 text-gray-600">
-          <p className="text-lg font-medium text-gray-500">No matched jobs in the last 7 days</p>
-          <p className="text-sm mt-1">
+        <div className={clsx('text-center', 'py-20', 'text-gray-600')}>
+          <p className={clsx('text-lg', 'font-medium', 'text-gray-500')}>No matched jobs in the last 7 days</p>
+          <p className={clsx('text-sm', 'mt-1')}>
             New jobs will appear here when the daily scraper runs, or add one manually via the Tracker.
           </p>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4')}>
             {jobs.map((job) => (
               <JobCard
                 key={job.id}
@@ -194,21 +196,21 @@ export default function DashboardPage() {
               />
             ))}
           </div>
-          <div className="flex items-center justify-between mt-6">
+          <div className={clsx('flex', 'items-center', 'justify-between', 'mt-6')}>
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-sm rounded-lg transition-colors"
+              className={clsx('flex', 'items-center', 'gap-1.5', 'px-4', 'py-2', 'bg-gray-800', 'hover:bg-gray-700', 'disabled:opacity-30', 'disabled:cursor-not-allowed', 'text-gray-300', 'text-sm', 'rounded-lg', 'transition-colors')}
             >
-              <ChevronLeft className="w-4 h-4" /> Previous
+              <ChevronLeft className={clsx('w-4', 'h-4')} /> Previous
             </button>
-            <span className="text-sm text-gray-500">Page {page + 1}</span>
+            <span className={clsx('text-sm', 'text-gray-500')}>Page {page + 1}</span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={!hasMore}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-sm rounded-lg transition-colors"
+              className={clsx('flex', 'items-center', 'gap-1.5', 'px-4', 'py-2', 'bg-gray-800', 'hover:bg-gray-700', 'disabled:opacity-30', 'disabled:cursor-not-allowed', 'text-gray-300', 'text-sm', 'rounded-lg', 'transition-colors')}
             >
-              Next <ChevronRight className="w-4 h-4" />
+              Next <ChevronRight className={clsx('w-4', 'h-4')} />
             </button>
           </div>
         </>
